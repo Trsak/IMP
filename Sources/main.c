@@ -93,9 +93,9 @@ void ADC0_Init(void)
 	NVIC_ClearPendingIRQ(ADC0_IRQn);
     NVIC_EnableIRQ(ADC0_IRQn);
 
-    ADC0_CFG1 = ADC_CFG1_ADICLK(0x1) | ADC_CFG1_ADIV(0x3) | ADC_CFG1_MODE(0x1) | ADC_CFG1_ADLSMP(0x1);
-    ADC0_SC3 = ADC_SC3_AVGS(0x3) | ADC_SC3_AVGE(0x1) | ADC_SC3_ADCO(0x1);
-    ADC0_SC1A = ADC_SC1_DIFF(0x0) | ADC_SC1_ADCH(0x10) | ADC_SC1_AIEN(0x1);
+    ADC0_CFG1 = 0b01110101;
+    ADC0_SC3 = 0b00001111;
+    ADC0_SC1A = 0b01010000;
 }
 
 void display_val(char *val_str) {
@@ -116,27 +116,21 @@ void display_val(char *val_str) {
     }
 }
 
-const int zpozdeniMereni = 60;
+const int zpozdeniMereni = 60 + 4;
 int frekvence = 0;
-bool doIt = true;
 
 void ADC0_IRQHandler(void) {
 	int value = ADC0_RA;
 
-	if (doIt) {
-		doIt = false;
-		static int uderyZaMinutu = 0;
-		int tepovaFrekvence = 0;
+	static int uderyZaMinutu = 0;
+	int tepovaFrekvence = 0;
 
-		if (detekceTepu(value, zpozdeniMereni)) {
-			frekvence = 60000 / uderyZaMinutu;
-			uderyZaMinutu = 0;
-		}
-
-		delay(zpozdeniMereni);
-		uderyZaMinutu += zpozdeniMereni;
-		doIt = true;
+	if (detekceTepu(value, zpozdeniMereni)) {
+		frekvence = 60000 / uderyZaMinutu;
+		uderyZaMinutu = 0;
 	}
+
+	uderyZaMinutu += 60;
 }
 
 int main(void)
