@@ -1,32 +1,24 @@
 /* Header file with all the essential definitions for a given type of MCU */
 #include "MK60D10.h"
+#include <stdio.h>
+#include <ctype.h>
+#include <string.h>
+#include <math.h>
 
-/* Macros for bit-level registers manipulation */
-#define GPIO_PIN_MASK	0x1Fu
-#define GPIO_PIN(x)		(((1)<<(x & GPIO_PIN_MASK)))
+#define D1 0x8C0
+#define D2 0xA80
+#define D3 0x2C0
+#define D4 0xA40
 
-/* Constants specifying delay loop duration */
-#define	DELAY_T 200000
+#define DELAY_LEDD 1000
 
-/* Mapping of LEDs and buttons to specific port pins: */
-// Note: only D9, SW3 and SW5 are used in this sample app
-#define LED_D9  0x20 // Port B, bit 5
-#define LED_D10 0x10 // Port B, bit 4
-#define LED_D11 0x8 // Port B, bit 3
-#define LED_D12 0x4 // Port B, bit 2
+unsigned int index;
 
-#define BTN_SW2 0x400 // Port E, bit 10
-#define BTN_SW3 0x1000 // Port E, bit 12
-#define BTN_SW4 0x8000000 // Port E, bit 27
-#define BTN_SW5 0x4000000 // Port E, bit 26
-#define BTN_SW6 0x800 // Port E, bit 11
-
-int pressed_up = 0, pressed_down = 0;
-unsigned int compare = 0x200;
+const unsigned int digitsA[] = {0x100, 0x100, 0x400, 0x500, 0x500, 0x500, 0x500, 0x100, 0x500, 0x500};
+const unsigned int digitsD[] = {0xB300, 0x100, 0xB100, 0x9100, 0x300, 0x9200, 0xA200, 0x1100, 0xB300, 0x9300};
 
 /* A delay function */
 void delay(long long bound) {
-
   long long i;
   for(i=0;i<bound;i++);
 }
@@ -40,83 +32,108 @@ void MCUInit(void)  {
 
 void PortsInit(void)
 {
-    /* Turn on all port clocks */
-    SIM->SCGC5 = SIM_SCGC5_PORTB_MASK | SIM_SCGC5_PORTE_MASK;
+    SIM->SCGC5 = SIM_SCGC5_PORTA_MASK | SIM_SCGC5_PORTD_MASK;
 
-    /* Set corresponding PTB pins (connected to LED's) for GPIO functionality */
-    PORTB->PCR[5] = PORT_PCR_MUX(0x01); // D9
-    PORTB->PCR[4] = PORT_PCR_MUX(0x01); // D10
-    PORTB->PCR[3] = PORT_PCR_MUX(0x01); // D11
-    PORTB->PCR[2] = PORT_PCR_MUX(0x01); // D12
+    PORTA->PCR[6] = PORT_PCR_MUX(0x01);
+    PORTA->PCR[7] = PORT_PCR_MUX(0x01);
+    PORTA->PCR[8] = PORT_PCR_MUX(0x01);
+    PORTA->PCR[9] = PORT_PCR_MUX(0x01);
+    PORTA->PCR[10] = PORT_PCR_MUX(0x01);
+    PORTA->PCR[11] = PORT_PCR_MUX(0x01);
 
-    PORTE->PCR[10] = PORT_PCR_MUX(0x01); // SW2
-    PORTE->PCR[12] = PORT_PCR_MUX(0x01); // SW3
-    PORTE->PCR[27] = PORT_PCR_MUX(0x01); // SW4
-    PORTE->PCR[26] = PORT_PCR_MUX(0x01); // SW5
-    PORTE->PCR[11] = PORT_PCR_MUX(0x01); // SW6
+    PORTD->PCR[8] = PORT_PCR_MUX(0x01);
+    PORTD->PCR[9] = PORT_PCR_MUX(0x01);
+    PORTD->PCR[12] = PORT_PCR_MUX(0x01);
+    PORTD->PCR[13] = PORT_PCR_MUX(0x01);
+    PORTD->PCR[14] = PORT_PCR_MUX(0x01);
+    PORTD->PCR[15] = PORT_PCR_MUX(0x01);
 
-    /* Change corresponding PTB port pins as outputs */
-    PTB->PDDR = GPIO_PDDR_PDD( 0x3C );
-    PTB->PDOR |= GPIO_PDOR_PDO( 0x3C); // turn all LEDs OFF
+    PTA->PDDR |= GPIO_PDDR_PDD(0xFC0);
+    PTD->PDDR |= GPIO_PDDR_PDD(0xF300);
 }
 
-void LPTMR0_IRQHandler(void)
-{
-    // Set new compare value set by up/down buttons
-    LPTMR0_CMR = compare; // !! the CMR reg. may only be changed while TCF == 1
-    LPTMR0_CSR |=  LPTMR_CSR_TCF_MASK; // writing 1 to TCF tclear the flag
-    GPIOB_PDOR ^= LED_D9; // invert D9 state
+void display_val(char *val_str) {
+    if (index >= strlen(val_str) || index > 4)
+    {
+        return;
+    }
+
+    if (isdigit(val_str[index]))
+    {
+        PTA->PDOR = GPIO_PDOR_PDO(digitsA[val_str[index]-'0']);
+        PTD->PDOR = GPIO_PDOR_PDO(digitsD[val_str[index]-'0']);
+        index++;
+    }
+    else
+    {
+        index++;
+    }
 }
 
-void LPTMR0Init(int count)
-{
-    SIM_SCGC5 |= SIM_SCGC5_LPTIMER_MASK;
-
-    LPTMR0_CSR &= ~LPTMR_CSR_TEN_MASK;     // Turn OFF LPTMR to perform setup
-
-    LPTMR0_PSR = ( LPTMR_PSR_PRESCALE(0) // 0000 is div 2
-                 | LPTMR_PSR_PBYP_MASK  // LPO feeds directly to LPT
-                 | LPTMR_PSR_PCS(1)) ; // use the choice of clock
-
-    LPTMR0_CMR = count;  // Set compare value
-
-    LPTMR0_CSR =(  LPTMR_CSR_TCF_MASK   // Clear any pending interrupt (now)
-                 | LPTMR_CSR_TIE_MASK   // LPT interrupt enabled
-                );
-
-    NVIC_EnableIRQ(LPTMR0_IRQn);
-
-    LPTMR0_CSR |= LPTMR_CSR_TEN_MASK;   // Turn ON LPTMR0 and start counting
-}
+char result[10] = "0105";
 
 int main(void)
 {
     MCUInit();
     PortsInit();
-    LPTMR0Init(compare);
+
+    /*
+
+      D1                    D2                    D3                    D4
+    		A
+    	---------             ---------             ---------             ---------
+       |	     |           |         |           |         |           |         |
+       |         |           |         |           |         |           |         |
+     F |	     | B         |         |           |         |           |         |
+       |         |           |         |           |         |           |         |
+       |    G    |           |         |           |         |           |         |
+    	---------             ---------             ---------             ---------
+       |         |           |         |           |         |           |         |
+       |         |           |         |           |         |           |         |
+     E |         | C         |         |           |         |           |         |
+       |         |           |         |           |         |           |         |
+       |         |           |         |           |         |           |         |
+    	---------   o         ---------   o         ---------   o         ---------   o
+    		D       DP
+
+    A = 0x1000 PTD
+    B = 0x100 PTD
+    D = 0x8000 PTD
+    E = 0x2000 PTD
+    F = 0x200 PTD
+
+    C = 0x100 PTA
+    G = 0x400 PTA
+
+	D1 = 0x0200 PTA
+	D2 = 0x0040 PTA
+	D3 = 0x0800 PTA
+	D4 = 0x0080 PTA
+
+    */
 
     while (1) {
-        // pressing the up button decreases the compare value,
-        // i.e. the compare event will occur more often;
-        // testing pressed_up avoids uncontrolled modification
-        // of compare if the button is hold.
-        if (!pressed_up && !(GPIOE_PDIR & BTN_SW5))
-        {
-            pressed_up = 1;
-            compare -= 0x40;
-        }
-        else if (GPIOE_PDIR & BTN_SW5) pressed_up = 0;
-        // pressing the down button increases the compare value,
-        // i.e. the compare event will occur less often;
-        if (!pressed_down && !(GPIOE_PDIR & BTN_SW3))
-        {
-            pressed_down = 1;
-            compare += 0x40;
-        }
-        else if (GPIOE_PDIR & BTN_SW3) pressed_down = 0;
-        // some limits - in order to keep the LED blinking reasonable
-        if (compare < 0x40) compare = 0x40;
-        if (compare > 0x400) compare = 0x400;
+    	index = 0;
+
+    	display_val(result);
+    	PTA->PDOR |= GPIO_PDOR_PDO(D1);
+    	delay(DELAY_LEDD);
+    	PTA->PDOR &= GPIO_PDOR_PDO(~D1);
+
+    	display_val(result);
+    	PTA->PDOR |= GPIO_PDOR_PDO(D2);
+    	delay(DELAY_LEDD);
+    	PTA->PDOR &= GPIO_PDOR_PDO(~D2);
+
+    	display_val(result);
+    	PTA->PDOR |= GPIO_PDOR_PDO(D3);
+    	delay(DELAY_LEDD);
+    	PTA->PDOR &= GPIO_PDOR_PDO(~D3);
+
+    	display_val(result);
+    	PTA->PDOR |= GPIO_PDOR_PDO(D4);
+    	delay(DELAY_LEDD);
+    	PTA->PDOR &= GPIO_PDOR_PDO(~D4);
     }
 
     return 0;
