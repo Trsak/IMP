@@ -11,7 +11,7 @@
 #define D3 0x2C0
 #define D4 0xA40
 
-#define DELAY_LEDD 5000
+#define DELAY_LEDD 1000
 
 unsigned int index;
 
@@ -56,12 +56,44 @@ void PortsInit(void)
     PTD->PDDR |= GPIO_PDDR_PDD(0xF300);
 }
 
+bool detekceTepu(int analogHodnota, int zpozdeni) {
+  // vytvoøení pomocných promìnných
+  static int maxHodnota = 0;
+  static bool SpickovaHodnota = false;
+  bool vysledek = false;
+  // pøepoèet analogové hodnoty pro další výpoèty
+  analogHodnota *= (1000 / zpozdeni);
+  // upravení maximální hodnoty
+  if (analogHodnota * 4L < maxHodnota) {
+    maxHodnota = analogHodnota * 0.8;
+  }
+  // detekce špièkové hodnoty
+  if (analogHodnota > maxHodnota - (1000 / zpozdeni)) {
+    // nastavení nového maxima pøi detekované špièce
+    if (analogHodnota > maxHodnota) {
+      maxHodnota = analogHodnota;
+    }
+    // nastavení platnosti výsledku, když
+    // nebyla detekována špièka
+    if (SpickovaHodnota == false) {
+      vysledek = true;
+    }
+    SpickovaHodnota = true;
+  } else if (analogHodnota < maxHodnota - (3000 / zpozdeni)) {
+    SpickovaHodnota = false;
+    // upravení maximální hodnoty pøi zmìnì mìøených hodnot
+    maxHodnota -= (1000 / zpozdeni);
+  }
+  // vrácení výsledku podprogramu
+  return vysledek;
+}
+
 void ADC0_Init(void)
 {
 	NVIC_ClearPendingIRQ(ADC0_IRQn);
     NVIC_EnableIRQ(ADC0_IRQn);
 
-    ADC0_CFG1 = ADC_CFG1_ADICLK(0x1) | ADC_CFG1_ADIV(0x3) | ADC_CFG1_MODE(0x2) | ADC_CFG1_ADLSMP(0x1);
+    ADC0_CFG1 = ADC_CFG1_ADICLK(0x1) | ADC_CFG1_ADIV(0x3) | ADC_CFG1_MODE(0x1) | ADC_CFG1_ADLSMP(0x1);
     ADC0_SC3 = ADC_SC3_AVGS(0x3) | ADC_SC3_AVGE(0x1) | ADC_SC3_ADCO(0x1);
     ADC0_SC1A = ADC_SC1_DIFF(0x0) | ADC_SC1_ADCH(0x10) | ADC_SC1_AIEN(0x1);
 }
@@ -84,8 +116,20 @@ void display_val(char *val_str) {
     }
 }
 
+const int zpozdeniMereni = 30;
+
 void ADC0_IRQHandler(void) {
-	sprintf(result, "%04d", ADC0_RA);
+	static int uderyZaMinutu = 0;
+	int tepovaFrekvence = 0;
+
+	if (detekceTepu(ADC0_RA, zpozdeniMereni)) {
+		tepovaFrekvence = 60000 / uderyZaMinutu;
+		sprintf(result, "%04d", tepovaFrekvence);
+	    uderyZaMinutu = 0;
+	}
+
+	delay(zpozdeniMereni);
+	uderyZaMinutu += zpozdeniMereni;
 }
 
 int main(void)
