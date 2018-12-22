@@ -123,8 +123,6 @@ void ADC0_IRQHandler(void) {
 	int value = ADC0_RA;
 
 	static int uderyZaMinutu = 0;
-	int tepovaFrekvence = 0;
-
 	if (detekceTepu(value, zpozdeniMereni)) {
 		frekvence = 60000 / uderyZaMinutu;
 		uderyZaMinutu = 0;
