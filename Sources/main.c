@@ -118,18 +118,25 @@ void display_val(char *val_str) {
 
 const int zpozdeniMereni = 60;
 int frekvence = 0;
+bool doIt = true;
 
 void ADC0_IRQHandler(void) {
-	static int uderyZaMinutu = 0;
-	int tepovaFrekvence = 0;
+	int value = ADC0_RA;
 
-	if (detekceTepu(ADC0_RA, zpozdeniMereni)) {
-		frekvence = 60000 / uderyZaMinutu;
-	    uderyZaMinutu = 0;
+	if (doIt) {
+		doIt = false;
+		static int uderyZaMinutu = 0;
+		int tepovaFrekvence = 0;
+
+		if (detekceTepu(value, zpozdeniMereni)) {
+			frekvence = 60000 / uderyZaMinutu;
+			uderyZaMinutu = 0;
+		}
+
+		delay(zpozdeniMereni);
+		uderyZaMinutu += zpozdeniMereni;
+		doIt = true;
 	}
-
-	delay(zpozdeniMereni);
-	uderyZaMinutu += zpozdeniMereni;
 }
 
 int main(void)
@@ -139,8 +146,13 @@ int main(void)
     ADC0_Init();
 
     while (1) {
+    	static int delayedResult = 0;
     	index = 0;
-    	sprintf(result, "%04d", frekvence);
+
+    	if (delayedResult >= 100) {
+			sprintf(result, "%04d", frekvence);
+			delayedResult = 0;
+    	}
 
     	display_val(result);
     	PTA->PDOR |= GPIO_PDOR_PDO(D1);
@@ -161,6 +173,8 @@ int main(void)
     	PTA->PDOR |= GPIO_PDOR_PDO(D4);
     	delay(DELAY_LEDD);
     	PTA->PDOR &= GPIO_PDOR_PDO(~D4);
+
+    	++delayedResult;
     }
 
     return 0;
