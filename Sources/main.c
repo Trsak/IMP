@@ -140,7 +140,12 @@ void LPTMR0_IRQHandler(void) {
 	//Check if heartbeat is detected
 	if (heartbeatDetected(analogValue, delayMsec)) {
 		//Heartbeat is detected, calculate BPM
-		heartRateBPM = 60000 / beatMsec;
+		int tempHeartRateBPM = 60000 / beatMsec;
+
+		if (tempHeartRateBPM > 40 & tempHeartRateBPM < 200) {
+			heartRateBPM = tempHeartRateBPM;
+		}
+
 		beatMsec = 0;
 	}
 
@@ -180,6 +185,7 @@ int main(void)
     while (1) {
     	//Delay showing new BPM value
     	static int delayedResult = 0;
+
     	index = 0;
 
     	if (delayedResult >= 100) {
